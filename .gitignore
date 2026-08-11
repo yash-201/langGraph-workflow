@@ -1,0 +1,24 @@
+# Environment variables and secrets
+.env
+*.env
+!.env.example
+
+# Python Virtual Environments
+myenv/
+venv/
+.venv/
+env/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
