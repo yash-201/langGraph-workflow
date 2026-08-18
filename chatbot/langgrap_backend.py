@@ -16,7 +16,7 @@ load_dotenv(override=True)
 api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 # Generator: Production model for complex creative/technical output
 model = ChatGoogleGenerativeAI(
-    model='gemini-3.6-flash',  # gemini-3.6-flash
+    model='gemini-3.5-flash',  # gemini-3.6-flash # gemini-3.5-flash
     max_retries=6,
     google_api_key=api_key
 )
@@ -54,3 +54,10 @@ workflow = graph.compile(checkpointer=checkpointer)
 # ):
 #     if message_chunk.content:
 #         print(message_chunk.content, end='', flush=True)
+
+# CONFIG = {'configurable': {'thread_id': 'thread-1'}}
+
+# response = workflow.invoke({ "messages": [HumanMessage(content="Hello")] }, config=CONFIG)
+
+
+# print(workflow.get_state(config=CONFIG).values['messages'])
