@@ -30,7 +30,7 @@ class ChatState(TypedDict):
 def chat_node(state: ChatState):
     messages = state['messages']
 
-    response = model.invoke(messages)
+    response = model.invoke(messages) # entire output return 
     
     return { 'messages': [response]}
 
@@ -46,3 +46,11 @@ graph.add_edge(START, 'chat_node')
 graph.add_edge('chat_node', END)
 
 workflow = graph.compile(checkpointer=checkpointer)
+
+# for message_chunk, metadata in workflow.stream(
+#     { "messages": [HumanMessage(content="Hello")] },
+#     config={'configurable': {'thread_id': 'thread-1'}},
+#     stream_mode="messages"
+# ):
+#     if message_chunk.content:
+#         print(message_chunk.content, end='', flush=True)
