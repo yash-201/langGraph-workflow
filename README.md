@@ -84,14 +84,20 @@ python -m ipykernel install --user --name=myenv --display-name "myenv"
 
 ---
 
-### 7. Run Notebook Workflows
+### 7. Run Notebook Workflows & Chatbot App
 
 Open VS Code or Jupyter Notebook and run the following notebooks:
 
 1. **`1_bmi_workflow.ipynb`**: Deterministic LangGraph workflow for calculating and labeling BMI.
 2. **`2_simple_llm_workflow.ipynb`**: LLM-powered LangGraph workflow using Google Gemini / OpenAI.
 
-> **Note**: In VS Code, ensure you select **myenv** as your Jupyter kernel in the top-right corner of the notebook editor.
+#### Run Streamlit Chatbot:
+To run the interactive Streamlit chatbot application:
+
+```bash
+cd chatbot
+streamlit run streamlit_frontend.py
+```
 
 ---
 
@@ -102,3 +108,4 @@ When you are finished working:
 ```bash
 deactivate
 ```
+
