@@ -3,7 +3,7 @@
 import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
@@ -19,9 +19,9 @@ PDF_PATH = "islr.pdf"  # <-- change to your PDF filename
 # Initialize Gemini Model
 api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 
-# 1) Load PDF
+# 1) Load PDF (limiting to first 15 pages to stay within free tier quota)
 loader = PyPDFLoader(PDF_PATH)
-docs = loader.load()  # one Document per page
+docs = loader.load()[:15]  # one Document per page
 
 # 2) Chunk
 splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
@@ -29,7 +29,7 @@ splits = splitter.split_documents(docs)
 
 # 3) Embed + index
 emb = GoogleGenerativeAIEmbeddings(
-    model='gemini-embedding-001',
+    model='models/gemini-embedding-001',
     max_retries=6,
     google_api_key=api_key
 )
