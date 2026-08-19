@@ -1,5 +1,5 @@
 import streamlit as st
-from langgrap_backend import workflow
+from langgrap_database_backend import workflow, retrieve_all_threads
 from langchain_core.messages import HumanMessage
 import uuid
 
@@ -48,8 +48,13 @@ if 'message_history' not in st.session_state:
 if 'thread_id' not in st.session_state:
     st.session_state.thread_id = create_new_thread_id()
 
+db_threads = retrieve_all_threads()
 if 'chat_threads' not in st.session_state:
-    st.session_state.chat_threads = []
+    st.session_state.chat_threads = db_threads
+else:
+    for t in db_threads:
+        if t not in st.session_state.chat_threads:
+            st.session_state.chat_threads.append(t)
 
 add_thread(st.session_state.thread_id)
 # ********************** session setup end **********************
@@ -116,4 +121,6 @@ if user_input:
             ai_message = st.write_stream(stream_generator())
 
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+    add_thread(st.session_state.thread_id)
+    st.rerun()
 
