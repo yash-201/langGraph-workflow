@@ -1,6 +1,6 @@
 import streamlit as st
-from langgrap_database_backend import workflow, retrieve_all_threads
-from langchain_core.messages import HumanMessage
+from langgrap_tool_database_backend import workflow, retrieve_all_threads
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 import uuid
 
 # *********************** utility functions start **********************
@@ -76,14 +76,17 @@ for thread_id in st.session_state.chat_threads[::-1]:
         st.session_state.thread_id = thread_id
         temp_messages = []
         for m in messages:
-            role = 'user' if isinstance(m, HumanMessage) else 'assistant'
-            temp_messages.append({'role': role, 'content': extract_text(m.content)})
+            if isinstance(m, HumanMessage):
+                temp_messages.append({'role': 'user', 'content': extract_text(m.content)})
+            elif isinstance(m, AIMessage) and extract_text(m.content).strip():
+                # Filter out intermediate tool-calling AIMessages
+                if not getattr(m, 'tool_calls', None):
+                    temp_messages.append({'role': 'assistant', 'content': extract_text(m.content)})
         st.session_state.message_history = temp_messages
         st.rerun()
 
 # ********************** sidebar setup end **********************
 
-# CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 CONFIG = {
     "configurable": {"thread_id": st.session_state["thread_id"]},
     "metadata": {
@@ -113,21 +116,24 @@ if user_input:
             config=CONFIG,
             stream_mode="messages"
         ):
-            content = message_chunk.content
-            if isinstance(content, str):
-                yield content
-            elif isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and "text" in block:
-                        yield block["text"]
-                    elif isinstance(block, str):
-                        yield block
+            # Only stream final text responses from AIMessage (ignore raw ToolMessages & tool call requests)
+            if isinstance(message_chunk, AIMessage) and not getattr(message_chunk, 'tool_calls', None):
+                content = message_chunk.content
+                if isinstance(content, str) and content:
+                    yield content
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and "text" in block:
+                            yield block["text"]
+                        elif isinstance(block, str) and block:
+                            yield block
 
     with st.chat_message('assistant'):
-        with st.spinner("Thinking..."):
+        with st.spinner("Thinking & executing tools..."):
             ai_message = st.write_stream(stream_generator())
 
-    st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+    if ai_message:
+        st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
     add_thread(st.session_state.thread_id)
     st.rerun()
 

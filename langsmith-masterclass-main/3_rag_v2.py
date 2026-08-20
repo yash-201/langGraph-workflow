@@ -77,14 +77,14 @@ def format_docs(docs):
 
 # Build the index under traced setup
 vectorstore = setup_pipeline(PDF_PATH)
-    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4})
 
-    parallel = RunnableParallel({
-        "context": retriever | RunnableLambda(format_docs),
-        "question": RunnablePassthrough(),
-    })
+parallel = RunnableParallel({
+    "context": retriever | RunnableLambda(format_docs),
+    "question": RunnablePassthrough(),
+})
 
-    chain = parallel | prompt | llm | StrOutputParser()
+chain = parallel | prompt | llm | StrOutputParser()
 
 # ---------- run a query (also traced) ----------
 print("PDF RAG ready. Ask a question (or Ctrl+C to exit).")
