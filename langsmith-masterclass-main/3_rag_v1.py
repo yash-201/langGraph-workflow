@@ -53,8 +53,8 @@ llm = ChatGoogleGenerativeAI(
 def format_docs(docs): return "\n\n".join(d.page_content for d in docs)
 
 parallel = RunnableParallel({
-    "context": retriever | RunnableLambda(format_docs),
-    "question": RunnablePassthrough()
+    "context": retriever | RunnableLambda(format_docs), # RunnableLambda to format the docs # RunnableLambda allows to run any function in chain 
+    "question": RunnablePassthrough() # RunnablePassthrough to pass the question
 })
 
 chain = parallel | prompt | llm | StrOutputParser()

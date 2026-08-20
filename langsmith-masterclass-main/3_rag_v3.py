@@ -7,21 +7,26 @@ from langsmith import traceable
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 
 PDF_PATH = "islr.pdf"  # <- change to your file
 
+os.environ['LANGCHAIN_PROJECT'] = 'RAG App v3'
+
+# Initialize Gemini Model
+api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+
 # ----------------- helpers (not traced individually) -----------------
 @traceable(name="load_pdf")
 def load_pdf(path: str):
     loader = PyPDFLoader(path)
-    return loader.load()  # list[Document]
+    return loader.load()[:15]  # list[Document]
 
 @traceable(name="split_documents")
 def split_documents(docs, chunk_size=1000, chunk_overlap=150):
@@ -32,7 +37,11 @@ def split_documents(docs, chunk_size=1000, chunk_overlap=150):
 
 @traceable(name="build_vectorstore")
 def build_vectorstore(splits):
-    emb = OpenAIEmbeddings(model="text-embedding-3-small")
+    emb = GoogleGenerativeAIEmbeddings(
+        model='models/gemini-embedding-001',
+        max_retries=6,
+        google_api_key=api_key
+    )
     return FAISS.from_documents(splits, emb)
 
 # ----------------- parent setup function (traced) -----------------
@@ -45,7 +54,13 @@ def setup_pipeline(pdf_path: str, chunk_size=1000, chunk_overlap=150):
     return vs
 
 # ----------------- model, prompt, and run -----------------
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# Generator: Production model for complex creative/technical output
+llm = ChatGoogleGenerativeAI(
+    model='gemini-3.6-flash',  # gemini-3.6-flash # gemini-3.5-flash
+    max_retries=6,
+    google_api_key=api_key
+)
+
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "Answer ONLY from the provided context. If not found, say you don't know."),
