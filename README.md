@@ -96,7 +96,12 @@ To run the interactive Streamlit chatbot application:
 
 ```bash
 cd chatbot
-streamlit run streamlit_frontend.py
+# Make sure your virtual environment is activated:
+..\myenv\Scripts\activate
+
+streamlit run streamlit_database_frontend_threading.py
+# Or run directly via virtual environment python:
+d:\langGraph\myenv\Scripts\python.exe -m streamlit run streamlit_database_frontend_threading.py
 ```
 
 ---
