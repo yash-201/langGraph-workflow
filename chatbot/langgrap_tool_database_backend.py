@@ -99,7 +99,7 @@ graph.add_node('tools', tool_node)
 
 # Add edges
 graph.add_edge(START, 'chat_node')
-graph.add_conditional_edges('chat_node', tools_condition, ['tools', END])
+graph.add_conditional_edges('chat_node', tools_condition, ['tools', END]) # here END is keyword to stop the execution of the graph.
 graph.add_edge('tools', 'chat_node')
 
 workflow = graph.compile(checkpointer=checkpointer)
