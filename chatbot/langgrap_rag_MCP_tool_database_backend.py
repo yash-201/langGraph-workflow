@@ -1,7 +1,10 @@
 import os
 import sys
+import json
 import sqlite3
 import requests
+import hashlib
+from pathlib import Path
 from typing import TypedDict, Annotated, Literal
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -9,7 +12,10 @@ from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from langchain_core.tools import tool
 from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -96,7 +102,92 @@ def get_owner_portfolio():
     """
     return {"name": "Yash", "age": 22, "company": "Self"}
 
-local_tools = [search_tool, calculator, get_stock_price, get_owner_portfolio]
+# ----------------- RAG Vectorstore & Retriever Setup -----------------
+INDEX_ROOT = Path(__file__).parent / ".indices"
+INDEX_ROOT.mkdir(exist_ok=True)
+
+def _file_fingerprint(path: str) -> dict:
+    p = Path(path)
+    h = hashlib.sha256()
+    with p.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return {"sha256": h.hexdigest(), "size": p.stat().st_size, "mtime": int(p.stat().st_mtime)}
+
+def _index_key(pdf_path: str, chunk_size: int, chunk_overlap: int, embed_model_name: str) -> str:
+    meta = {
+        "pdf_fingerprint": _file_fingerprint(pdf_path),
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+        "embedding_model": embed_model_name,
+        "format": "v1",
+    }
+    return hashlib.sha256(json.dumps(meta, sort_keys=True).encode("utf-8")).hexdigest()
+
+def load_or_build_index(
+    pdf_path: str,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 150,
+    embed_model_name: str = "models/gemini-embedding-001",
+    force_rebuild: bool = False,
+):
+    key = _index_key(pdf_path, chunk_size, chunk_overlap, embed_model_name)
+    index_dir = INDEX_ROOT / key
+    emb = GoogleGenerativeAIEmbeddings(
+        model=embed_model_name,
+        max_retries=6,
+        google_api_key=api_key
+    )
+
+    if index_dir.exists() and not force_rebuild:
+        return FAISS.load_local(
+            str(index_dir),
+            emb,
+            allow_dangerous_deserialization=True
+        )
+
+    loader = PyPDFLoader(pdf_path)
+    docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    splits = splitter.split_documents(docs)
+    vectorstore = FAISS.from_documents(splits, emb)
+
+    index_dir.mkdir(parents=True, exist_ok=True)
+    vectorstore.save_local(str(index_dir))
+    return vectorstore
+
+_retriever = None
+
+def get_retriever():
+    global _retriever
+    if _retriever is None:
+        pdf_path = os.path.join(os.path.dirname(__file__), "..", "langsmith-masterclass-main", "islr.pdf")
+        if not os.path.exists(pdf_path):
+            pdf_path = os.path.join(os.path.dirname(__file__), "islr.pdf")
+        vectorstore = load_or_build_index(pdf_path)
+        _retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+    return _retriever
+
+@tool
+def rag_tool(query: str) -> dict:
+    """
+    Retrieve relevant information from the pdf document.
+    Use this tool when the user asks factual / conceptual questions
+    that might be answered from the stored documents.
+    """
+    retriever = get_retriever()
+    result = retriever.invoke(query)
+
+    context = [doc.page_content for doc in result]
+    metadata = [doc.metadata for doc in result]
+
+    return {
+        'query': query,
+        'context': context,
+        'metadata': metadata
+    }
+
+local_tools = [search_tool, calculator, get_stock_price, get_owner_portfolio, rag_tool]
 
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages] 
@@ -130,7 +221,7 @@ async def build_graph(checkpointer=None):
 
     # Add edges
     graph.add_edge(START, 'chat_node')
-    graph.add_conditional_edges('chat_node', tools_condition, ['tools', END]) # here END is keyword to stop the execution of the graph.
+    graph.add_conditional_edges('chat_node', tools_condition, ['tools', END])
     graph.add_edge('tools', 'chat_node')
 
     workflow = graph.compile(checkpointer=checkpointer)
