@@ -138,6 +138,7 @@ async def build_graph(checkpointer=None):
     return workflow
 
 async def main():
+    # Open the checkpoint connection asynchronously
     async with AsyncSqliteSaver.from_conn_string(DB_PATH) as checkpointer:
         workflow = await build_graph(checkpointer=checkpointer)
         # CONFIG = {'configurable': {'thread_id': 'thread-1'}}

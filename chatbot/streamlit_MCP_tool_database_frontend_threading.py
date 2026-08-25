@@ -85,13 +85,26 @@ for thread_id in st.session_state.chat_threads[::-1]:
         st.session_state.thread_id = thread_id
         messages = load_conversion(thread_id)
         temp_messages = []
+        pending_tools = []
         for m in messages:
             if isinstance(m, HumanMessage):
                 temp_messages.append({'role': 'user', 'content': extract_text(m.content)})
-            elif isinstance(m, AIMessage) and extract_text(m.content).strip():
-                # Filter out intermediate tool-calling AIMessages
-                if not getattr(m, 'tool_calls', None):
-                    temp_messages.append({'role': 'assistant', 'content': extract_text(m.content)})
+                pending_tools = []
+            elif isinstance(m, ToolMessage) and getattr(m, 'name', None):
+                if m.name not in pending_tools:
+                    pending_tools.append(m.name)
+            elif isinstance(m, AIMessage):
+                if getattr(m, 'tool_calls', None):
+                    for tc in m.tool_calls:
+                        t_name = tc.get('name')
+                        if t_name and t_name not in pending_tools:
+                            pending_tools.append(t_name)
+                elif extract_text(m.content).strip():
+                    msg_obj = {'role': 'assistant', 'content': extract_text(m.content)}
+                    if pending_tools:
+                        msg_obj['tools_used'] = list(pending_tools)
+                        pending_tools = []
+                    temp_messages.append(msg_obj)
         st.session_state.message_history = temp_messages
         if temp_messages:
             for msg in temp_messages:
@@ -114,6 +127,8 @@ CONFIG = {
 # ********************** display existing history start **********************
 for message in st.session_state['message_history']:
     with st.chat_message(message['role']):
+        if message.get('tools_used'):
+            st.caption("🛠️ **Tools used:** " + ", ".join([f"`{t}`" for t in message['tools_used']]))
         st.markdown(message['content'])
 # ********************** display existing history end **********************
 
@@ -126,12 +141,24 @@ if user_input:
         st.markdown(user_input)
     
 
+    called_tools = []
+
     def stream_generator():
         for message_chunk, metadata in workflow.stream(
             {"messages": [HumanMessage(content=user_input)]},
             config=CONFIG,
             stream_mode="messages"
         ):
+            # Track tools executed
+            if isinstance(message_chunk, ToolMessage) and getattr(message_chunk, 'name', None):
+                if message_chunk.name not in called_tools:
+                    called_tools.append(message_chunk.name)
+            elif isinstance(message_chunk, AIMessage) and getattr(message_chunk, 'tool_calls', None):
+                for tc in message_chunk.tool_calls:
+                    t_name = tc.get('name')
+                    if t_name and t_name not in called_tools:
+                        called_tools.append(t_name)
+
             # Only stream final text responses from AIMessage (ignore raw ToolMessages & tool call requests)
             if isinstance(message_chunk, AIMessage) and not getattr(message_chunk, 'tool_calls', None):
                 content = message_chunk.content
@@ -147,9 +174,14 @@ if user_input:
     with st.chat_message('assistant'):
         with st.spinner("Thinking & executing tools..."):
             ai_message = st.write_stream(stream_generator())
+        if called_tools:
+            st.caption("🛠️ **Tools used:** " + ", ".join([f"`{t}`" for t in called_tools]))
 
     if ai_message:
-        st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+        msg_obj = {'role': 'assistant', 'content': ai_message}
+        if called_tools:
+            msg_obj['tools_used'] = called_tools
+        st.session_state['message_history'].append(msg_obj)
     add_thread(st.session_state.thread_id)
     st.rerun()
 
