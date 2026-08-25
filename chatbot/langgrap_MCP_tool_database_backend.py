@@ -25,7 +25,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "chatbot.db")
 # Initialize Gemini Model
 api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 model = ChatGoogleGenerativeAI(
-    model='gemini-3.5-flash',
+    model='gemini-3.6-flash',
     max_retries=6,
     google_api_key=api_key
 )
